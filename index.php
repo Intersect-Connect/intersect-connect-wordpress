@@ -4,13 +4,15 @@
  * Plugin Name: Intersect Connect
  * Plugin URI: https://akismet.com/
  * Description: Plugin to connect Intersect Server to WordPress
- * Version: 1.1
+ * Version: 1.0
  * Requires PHP: 8.1
  * Author: XFallSeane
  * Author URI: https://thomasfds.fr
  * License: GPLv2 or later
  * Text Domain: Intersect Connect
  */
+
+require_once("api.php");
 
 // Crée la table "intersect_connect" dans la base de données WordPress avec les colonnes "id", "key" et "value".
 function intersect_connect_create_table()
@@ -21,7 +23,7 @@ function intersect_connect_create_table()
     $sql = "CREATE TABLE $table_name (
         id int(11) NOT NULL AUTO_INCREMENT,
         `key` varchar(255) NOT NULL,
-        `value` varchar(255) NOT NULL,
+        `value` LONGTEXT NOT NULL,
         PRIMARY KEY (id)
     ) $charset_collate;";
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -83,8 +85,26 @@ function intersect_connect_admin_page()
         'Intersect Connect', // Titre de la page
         'Intersect Connect', // Titre du menu
         'manage_options', // Capacité requise pour accéder à la page
-        'intersect_connect_settings', // Slug de la page
+        'intersect-connect-settings', // Slug de la page
         'intersect_connect_render_admin_page' // Fonction de rappel pour le contenu de la page
+    );
+
+    add_submenu_page(
+        'intersect-connect-settings', // Slug de la page parente
+        'Paramètres', // Titre de la page de sous-menu
+        'Paramètres', // Titre du sous-menu
+        'manage_options', // Capacité requise pour accéder à la page de sous-menu
+        'intersect-connect-settings', // Slug de la page de sous-menu
+        'intersect_connect_render_admin_page' // Fonction de rappel pour le contenu de la page de sous-menu
+    );
+
+    add_submenu_page(
+        'intersect-connect-settings', // Slug de la page parente
+        'A propos', // Titre de la page de sous-menu
+        'A propos', // Titre du sous-menu
+        'manage_options', // Capacité requise pour accéder à la page de sous-menu
+        'intersect-connect-about', // Slug de la page de sous-menu
+        'intersect_connect_render_admin_page_about' // Fonction de rappel pour le contenu de la page de sous-menu
     );
 }
 
@@ -135,7 +155,16 @@ function intersect_connect_render_admin_page()
 <?php
 }
 
-function intersect_connect_insert_page() {
+function intersect_connect_render_admin_page_about()
+{
+    ob_start(); // Démarrer la mise en tampon de sortie
+    include 'templates/about.php'; // Inclure le fichier PHP
+    $content = ob_get_clean(); // Récupérer le contenu de la mise en tampon et vider la mise en tampon
+    echo $content; // Afficher le contenu du fichier PHP
+}
+
+function intersect_connect_insert_page()
+{
     global $wpdb;
 
     $page_title = 'Mise à jour Token';
@@ -173,7 +202,8 @@ function intersect_connect_insert_page() {
     }
 }
 
-function intersect_connect_token_shortcode() {
+function intersect_connect_token_shortcode()
+{
     // Récupérer les données nécessaires de la table intersect_connect (api_username, api_password, api_url)
     global $wpdb;
     $table_name = $wpdb->prefix . 'intersect_connect';
@@ -188,25 +218,17 @@ function intersect_connect_token_shortcode() {
         $authData = [
             "grant_type" => "password",
             "username" => $api_username,
-            "password" => $api_password
+            "password" => hash('sha256', $api_password)
         ];
 
         // Création du call API qui appel l'API de Intersect sur la route /api/oauth/token
-        $curl = curl_init($api_url . '/api/oauth/token');
-        curl_setopt($curl, CURLOPT_POST, true);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, $authData);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-        $response = curl_exec($curl);
-        curl_close($curl);
+        $auth = auth($authData, $api_url);
+        $new_token = $auth;
 
-        $response = json_decode($response, true);
-        $new_token = $response['access_token'];
         // Mettre à jour le token dans la table intersect_connect
         $wpdb->update(
             $table_name,
-            array('value' => $new_token),
+            array('value' => $auth),
             array('key' => 'api_token')
         );
 
@@ -214,7 +236,6 @@ function intersect_connect_token_shortcode() {
         $response = array(
             'success' => true,
             'message' => 'Token updated successfully.',
-            'token' => $new_token
         );
 
         wp_send_json($response);
@@ -229,8 +250,67 @@ function intersect_connect_token_shortcode() {
     }
 }
 
+function activation_page_shortcode()
+{
+    restrict_page_to_logged_in_users();
 
+    ob_start();
+
+    $page_title = 'Activation du compte de jeu';
+    $page_content = '
+                     <form action="" method="post">
+                        <label for="username">Nom d\'utilisateur:</label>
+                        <input type="text" name="username" id="username" required><br>
+                        <label for="password">Mot de passe:</label>
+                        <input type="password" name="password" id="password" required><br>
+                        <input type="submit" value="Activer le compte">
+                     </form>';
+
+    echo $page_content;
+
+    // Vérifier si le formulaire a été soumis
+    if (isset($_POST['username']) && isset($_POST['password'])) {
+        $username = sanitize_text_field($_POST['username']);
+        $password = sanitize_text_field($_POST['password']);
+
+        // Récupérer l'utilisateur connecté
+        $current_user = wp_get_current_user();
+
+        // Vérifier si le mot de passe correspond au mot de passe haché de l'utilisateur connecté
+        if (wp_check_password($password, $current_user->user_pass, $current_user->ID)) {
+            // On vérifie si l'user existe déjà dans la base de donnée Intersect
+            $user = getUser($current_user->display_name);
+
+            if (isset($user["Message"]) && $user["Message"] == "No user with name '$current_user->display_name'.") {
+                // On inscrit l'user en db
+                if (!register(['username' => $username, 'password' => hash('sha256', $password), 'email' => $current_user->user_email])) {
+                    echo '<p>Erreur lors de l\'activation !</p>';
+                }
+
+                echo '<p>Activation réussie !</p>';
+            } else {
+                echo '<p>Votre compte est déjà activer !</p>';
+            }
+        } else {
+            // Afficher le message d'erreur
+            echo '<p>Mot de passe incorrect.</p>';
+        }
+    }
+
+    return ob_get_clean();
+}
+
+
+function restrict_page_to_logged_in_users() {
+    // Vérifie si l'utilisateur n'est pas connecté
+    if (!is_user_logged_in()) {
+        // Redirige l'utilisateur vers la page de connexion
+        wp_redirect(wp_login_url());
+        exit;
+    }
+}
 
 add_action('admin_menu', 'intersect_connect_admin_page');
 register_activation_hook(__FILE__, 'intersect_connect_setup');
 add_shortcode('intersect-connect-token', 'intersect_connect_token_shortcode');
+add_shortcode('intersect-connect-activation-account', 'activation_page_shortcode');
