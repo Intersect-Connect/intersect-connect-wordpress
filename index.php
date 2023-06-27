@@ -85,30 +85,40 @@ function intersect_connect_admin_page()
         'Intersect Connect', // Titre de la page
         'Intersect Connect', // Titre du menu
         'manage_options', // Capacité requise pour accéder à la page
-        'intersect-connect-settings', // Slug de la page
-        'intersect_connect_render_admin_page' // Fonction de rappel pour le contenu de la page
+        'intersect-connect', // Slug de la page principale
+        'intersect_connect_render_admin_page_settings' // Fonction de rappel pour le contenu de la page
     );
 
     add_submenu_page(
-        'intersect-connect-settings', // Slug de la page parente
+        'intersect-connect', // Slug de la page parente
+        'Serveur', // Titre de la page de sous-menu
+        'Serveur', // Titre du sous-menu
+        'manage_options', // Capacité requise pour accéder à la page de sous-menu
+        'server', // Slug de la page de sous-menu
+        'intersect_connect_render_admin_page_server' // Fonction de rappel pour le contenu de la page de sous-menu
+    );
+
+    add_submenu_page(
+        'intersect-connect', // Slug de la page parente
         'Paramètres', // Titre de la page de sous-menu
         'Paramètres', // Titre du sous-menu
         'manage_options', // Capacité requise pour accéder à la page de sous-menu
-        'intersect-connect-settings', // Slug de la page de sous-menu
-        'intersect_connect_render_admin_page' // Fonction de rappel pour le contenu de la page de sous-menu
+        'settings', // Slug de la page de sous-menu
+        'intersect_connect_render_admin_page_settings' // Fonction de rappel pour le contenu de la page de sous-menu
     );
 
     add_submenu_page(
-        'intersect-connect-settings', // Slug de la page parente
+        'intersect-connect', // Slug de la page parente
         'A propos', // Titre de la page de sous-menu
         'A propos', // Titre du sous-menu
         'manage_options', // Capacité requise pour accéder à la page de sous-menu
-        'intersect-connect-about', // Slug de la page de sous-menu
+        'about', // Slug de la page de sous-menu
         'intersect_connect_render_admin_page_about' // Fonction de rappel pour le contenu de la page de sous-menu
     );
 }
 
-function intersect_connect_render_admin_page()
+
+function intersect_connect_render_admin_page_settings()
 {
     global $wpdb;
     $table_name = $wpdb->prefix . 'intersect_connect';
@@ -159,6 +169,14 @@ function intersect_connect_render_admin_page_about()
 {
     ob_start(); // Démarrer la mise en tampon de sortie
     include 'templates/about.php'; // Inclure le fichier PHP
+    $content = ob_get_clean(); // Récupérer le contenu de la mise en tampon et vider la mise en tampon
+    echo $content; // Afficher le contenu du fichier PHP
+}
+
+function intersect_connect_render_admin_page_server()
+{
+    ob_start(); // Démarrer la mise en tampon de sortie
+    include 'templates/server.php'; // Inclure le fichier PHP
     $content = ob_get_clean(); // Récupérer le contenu de la mise en tampon et vider la mise en tampon
     echo $content; // Afficher le contenu du fichier PHP
 }
